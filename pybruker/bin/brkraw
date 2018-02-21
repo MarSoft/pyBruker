@@ -43,7 +43,7 @@ def main():
         else:
             output = "UsageReport_{}.xlsx".format(datetime.datetime.now().date())
         path = args.path
-        list_of_raw = sorted([d for d in os.linesep(path) if os.path.isdir(os.path.join(path, d))])
+        list_of_raw = sorted([d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))])
         users = []
         dates = []
         scandurs = []
@@ -94,7 +94,7 @@ def main():
 
     elif args.function == 'tonii_all':
         path = args.path
-        list_of_raw = sorted([d for d in os.linesep(path) if os.path.isdir(os.path.join(path, d))])
+        list_of_raw = sorted([d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))])
         base_path = 'Data'
         try:
             os.mkdir(base_path)
