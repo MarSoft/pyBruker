@@ -5,12 +5,11 @@ import re
 import datetime
 import dateutil
 
+
 class BrukerRaw:
     """ BrukerRaw class
     This class provides the function to import parameters, data from Bruker Raw data
-
     """
-
     def __init__(self, path, summary=False):
         """ Initiate the object
         """
@@ -20,15 +19,34 @@ class BrukerRaw:
                 subject = f.readlines()[:]
                 self.subject = self.parsing(subject)
             pattern = r'Parameter List, ParaVision (.*)'
-            self.version = re.sub(pattern, r'\1', self.subject['TITLE'])
+            if re.match(pattern, self.subject['TITLE']):
+                self.version = re.sub(pattern, r'\1', self.subject['TITLE'])
+            else:
+                self.version = 'Paravision 5.1'
             # Check all scan information
             self.check_scans()
             if summary:
                 self.summary()
         except:
             self.subject = None
-            self.scanned = []
             self.scans = None
+
+    def method_param(self, scan):
+        """ Check scan method parameter
+
+        :param scan: Scan ID
+        :return: TR, TE, FlipAngle, BandWidth
+        """
+        method = self.scans[str(scan)]['method']
+        acqp = self.scans[str(scan)]['acqp']
+        tr = method['PVM_RepetitionTime']
+        te = method['PVM_EchoTime']
+        fa = acqp['ACQ_flip_angle']
+        try:
+            bw = method['PVM_EffSWh']/1000.0
+        except:
+            bw = 0.0
+        return tr, te, bw, fa
 
     def check_scans(self):
         """ Check all scans and save the parameter into self.scans object as dictionary
@@ -50,14 +68,16 @@ class BrukerRaw:
                     self.scans[scan]['method'] = self.parsing(method)
                     self.scans[scan]['acqp'] = self.parsing(acqp)
                     self.scans[scan]['reco'] = dict()
+                    self.scans[scan]['recoparam'] = dict()
                     for reco in os.listdir(os.path.join(scan_path, 'pdata')):
                         reco_path = os.path.join(scan_path, 'pdata', reco)
                         if os.path.isdir(reco_path):
                             with open(os.path.join(reco_path, 'visu_pars')) as f:
                                 pars = f.readlines()[:]
+                            with open(os.path.join(reco_path, 'reco')) as f:
+                                recoparam = f.readlines()[:]
                             self.scans[scan]['reco'][reco] = self.parsing(pars)
-                    if not len(self.scans[scan]['reco'].keys()):
-                        del self.scans[scan]
+                            self.scans[scan]['recoparam'][reco] = self.parsing(recoparam)
                 except:
                     del self.scans[scan]
 
@@ -108,7 +128,7 @@ class BrukerRaw:
         shape = matrix[:]
         dim = pars['VisuCoreDim']
 
-        if self.check_version(scan, reco) == 1:
+        if self.check_version(scan, reco) == 1: # Check number of slice packages
             if isinstance(method['PVM_SPackArrSliceOrient'], list):
                 slice_packs = len(method['PVM_SPackArrSliceOrient'])
             else:
@@ -119,25 +139,28 @@ class BrukerRaw:
             else:
                 slice_packs = 1
 
-        if 'VisuCoreSlicePacksSlices' in pars.keys():
+        if 'VisuCoreSlicePacksSlices' in pars.keys(): # Calculate number of slices
             slices_param = pars['VisuCoreSlicePacksSlices']
             if len(pars['VisuCoreSlicePacksSlices']) > 1:
                 if isinstance(slices_param[0], int):
                     slices = slices_param[1]
                 else:
                     slices = slices_param[-1][-1]
+            else:
+                slices = len(pars['VisuCoreOrientation'])
         else:
             if 'VisuCoreOrientation' in pars.keys():
                 slices = len(pars['VisuCoreOrientation']) / slice_packs
             else:
                 slices = 1
 
-        if slices == 1:
+        if slices == 1: # Complete 3D matrix shape
             if dim < 3:
                 shape.append(slices)
         else:
             shape.append(slices)
 
+        # Add rest of frame as 4th dimension
         frame = pars['VisuCoreFrameCount'] / slices / slice_packs
         if slice_packs > 1:
             shape.append(slice_packs)
@@ -149,7 +172,11 @@ class BrukerRaw:
         return dim, shape, slice_packs, idx
 
     def get_img(self, scan, reco):
-        """ Reshape the data into image
+        """ Reshape loaded data into image structure
+
+        :param scan: Scan ID
+        :param reco: Reco ID
+        :return: Shaped image
         """
         data = self.load_data(scan, reco)
         dim, size, slice_packs, idx = self.get_size(scan, reco)
@@ -160,6 +187,14 @@ class BrukerRaw:
         return img
 
     def save_as(self, scan, reco, filename, ext='.nii.gz'):
+        """ Save image data into NifTi format
+
+        :param scan: Scan ID
+        :param reco: Reco ID
+        :param filename: Output filename without extension
+        :param ext: extension (default: .nii.gz)
+        :return: Boolean (if 1, image is not saved)
+        """
         dim, shape, slice_packs, idx = self.get_size(scan, reco)
         if dim < 2:
             pass
@@ -177,21 +212,30 @@ class BrukerRaw:
                     nii = nib.Nifti1Image(img[..., i], affine[i])
                     nii = self.set_default_header(nii, scan)
                     nii.to_filename('{}_{}{}'.format(filename, slice_orient[i], ext))
+            return 0
+        return 1
 
     def get_resol(self, scan, reco):
+        """ Calculate image resolution
+
+        :param scan: Scan ID
+        :param reco: Reco ID
+        :return: Image resolution
+        """
         dim, shape, slice_packs, idx = self.get_size(scan, reco)
         pars = self.scans[str(scan)]['reco'][str(reco)]
         FOV = pars['VisuCoreExtent'][:]
         orient = self.scans[str(scan)]['method']['PVM_SPackArrSliceOrient']
-        try:
+        try: # Use slice distance as final slice tickness
             dist = pars['VisuCoreSlicePacksSliceDist']
         except:
             dist = pars['VisuCoreFrameThickness']
         if isinstance(dist, list):
             dist = dist[0]
+
         if dim == 2:
             FOV.append(shape[2] * dist)
-        try:
+        try: # calculate resolution and correct axes
             resol = np.asarray(map(float, FOV)) / np.asarray(shape[:3])
             if slice_packs == 1:
                 tf = self.check_transform(scan, reco)
@@ -209,10 +253,16 @@ class BrukerRaw:
             return None
 
     def get_center(self, scan, reco):
+        """ Check center coordinate
+
+        :param scan: Scan ID
+        :param reco: Reco ID
+        :return: Center coordinate, slice orientation inversion (Boolean)
+        """
         dim, shape, slice_packs, idx = self.get_size(scan, reco)
         pars = self.scans[str(scan)]['reco'][str(reco)]
         if slice_packs == 1:
-            first = pars['VisuCorePosition'][0]
+            first = pars['VisuCorePosition'][0] # Check if slice orientation is inverted
             last = pars['VisuCorePosition'][-1]
             if first.sum() - last.sum() < 0:
                 return first, False
@@ -223,6 +273,11 @@ class BrukerRaw:
 
     def calc_affine(self, scan, reco, quadruped=True):
         """ Calculate affine transformation matrix
+
+        :param scan: Scan ID
+        :param reco: Reco ID
+        :param quadruped: True if animal type is quadruped for correct position
+        :return: Affine transformation matrix
         """
         dim, shape, slice_packs, idx = self.get_size(scan, reco)
         pars = self.scans[str(scan)]['reco'][str(reco)]
@@ -231,7 +286,7 @@ class BrukerRaw:
         center, inverted = self.get_center(scan, reco)
         orient = self.scans[str(scan)]['method']['PVM_SPackArrSliceOrient']
 
-        if self.check_version(scan, reco) == 1:  # correct orientation if animal is quadruped (default=True)
+        if self.check_version(scan, reco) == 1:  # for PV5.1 and below
             if quadruped == True:
                 correct = np.array([[1, 0, 0, 0],
                                     [0, 0, 1, 0],
@@ -243,7 +298,7 @@ class BrukerRaw:
                                     [0, 0, 1, 0],
                                     [0, 0, 0, 1]])
         else:
-            if pars['VisuSubjectType'] == 'Quadruped':
+            if pars['VisuSubjectType'] == 'Quadruped': # for PV6 and above
                 correct = np.array([[1, 0, 0, 0],
                                     [0, 0, 1, 0],
                                     [0, 1, 0, 0],
@@ -253,7 +308,7 @@ class BrukerRaw:
                                     [0, 1, 0, 0],
                                     [0, 0, 1, 0],
                                     [0, 0, 0, 1]])
-        if slice_packs == 1:
+        if slice_packs == 1: # If image has only one slice package, return one affine matrix
             if isinstance(resol, list):
                 affine = np.dot(np.diag(resol), tf.T)
                 affine = np.append(affine.T, [center], axis=0).T
@@ -263,7 +318,7 @@ class BrukerRaw:
             else:
                 affine = None
         else:
-            if isinstance(resol, list):
+            if isinstance(resol, list): # If image has multiple slice packages, return list of affine matrices
                 affine = []
                 for i in range(slice_packs):
                     temp = np.dot(np.diag(resol[i]), tf[i].T)
@@ -276,6 +331,12 @@ class BrukerRaw:
         return affine
 
     def check_transform(self, scan, reco):
+        """ Return transform matrix saved on VisuPars
+
+        :param scan: Scan ID
+        :param reco: Reco ID
+        :return: Transform matrix
+        """
         tfs = self.scans[str(scan)]['reco'][str(reco)]['VisuCoreOrientation']
         result = tfs == tfs[0, :]
         if result.all():
@@ -285,16 +346,23 @@ class BrukerRaw:
 
     @property
     def scanned(self):
-        """ Return acquired scan numbers"""
-        return sorted(map(int, self.scans.keys()))
+        """ Return acquired scan numbers """
+        try:
+            return sorted(map(int, self.scans.keys()))
+        except:
+            return []
 
     def check_method(self, scan):
+        """ Check acquisition method """
         return self.scans[str(scan)]['method']['Method']
 
     def parsing(self, profiles):
         """ Parsing parameter files into Dictionary
         Some method paramters include '##$PVM_FlowSatGeoCub' are not compatible.
         There is no reason to fix it yet, no plan to fix this issue
+
+        :param profiles: list of strings
+        :return: Dictionary
         """
         p_mparam = r'^\#\#([^$]*)\=(.*)'
         p_profile = r'^\#\#\$(.*)\=.*'
@@ -375,6 +443,9 @@ class BrukerRaw:
 
     def check_dt(self, value):
         """ Check datatype of the given PV parameter value
+
+        :param value: String form of parameter value
+        :return: Value object with corrected data type
         """
         p_int = r'^-?[0-9]+$'
         p_float = r'^-?(\d+\.?)?\d+([eE][-+]?\d+)?$'
@@ -419,7 +490,12 @@ class BrukerRaw:
         return value
 
     def scan_datetime(self, item='all'):
-        """ item = 'all', 'date', 'duration' or 'time'
+        """ Check scanned date and time
+
+        :param item: Multiple options
+                - all : return date, start_time, end_time
+                - date : return only date
+                - time or duration : return start_time and end_time
         """
         last_scan = str(self.scanned[-1])
         if self.check_version(last_scan, 1) == 1:
@@ -449,21 +525,35 @@ class BrukerRaw:
 
     @property
     def study_id(self):
+        """ Subject ID """
         return self.subject['SUBJECT_id']
 
     @property
     def session_id(self):
+        """ Session ID """
         return self.subject['SUBJECT_study_name']
 
     @property
     def user_name(self):
+        """ Name of Researcher """
         return self.subject['SUBJECT_name_string']
 
     def check_version(self, scan, reco):
+        """ Check version of ParaVision
+
+        :param scan: Scan ID
+        :param reco: Reco ID
+        :return: 1 - PV5.1 or below, 3- PV6 or above
+        """
         return self.scans[str(scan)]['reco'][str(reco)]['VisuVersion']
 
     def check_array(self, n_value, values):
-        """ Check if the parameter is array shape """
+        """ Check if the parameter is array shape #TODO: need to improve but no reason to do it
+
+        :param n_value: Number of values shown on header file
+        :param values: The string values which can be split into array
+        :return:
+        """
         p_groups = r'\(([^)]*)\)'
         if re.match(p_groups, values):
             values = re.findall(p_groups, values)
@@ -473,13 +563,22 @@ class BrukerRaw:
         return values
 
     def multiply_shape(self, shape):
-        """ Multiply all input """
+        """  Multiply all input
+
+        :param shape: list of int
+        :return: results of multiply
+        """
         output = 1
         for i in shape:
             output *= i
         return output
 
     def calc_tempresol(self, scan):
+        """ Calculate temporal resolution
+
+        :param scan: Scan ID
+        :return: Temporal resolution
+        """
         method = self.scans[str(scan)]['method']
         tr = method['PVM_RepetitionTime']
         num_avr = method['PVM_NAverages']
@@ -489,7 +588,23 @@ class BrukerRaw:
         except:
             return tr * num_avr
 
+    def subject_info(self):
+        """ Return subject information """
+        type = self.subject['SUBJECT_type']
+        gender = self.subject['SUBJECT_sex']
+        weight = self.subject['SUBJECT_weight']
+        position = self.subject['SUBJECT_position']
+        entry = self.subject['SUBJECT_entry']
+        dob = self.subject['SUBJECT_dbirth']
+        return [type, gender, dob], [position, entry], weight
+
     def set_default_header(self, nii, scan):
+        """ Update NifTi Header information
+
+        :param nii: Nibabel NifTi Object
+        :param scan: Scan ID
+        :return: Nibabel NifTi Object with updated Header
+        """
         nii.header.default_x_flip = False
         method = self.scans[str(scan)]['method']
         acqp = self.scans[str(scan)]['acqp']
@@ -520,27 +635,45 @@ class BrukerRaw:
         return nii
 
     def summary(self):
-        """ Print out breif summary of the raw data
+        """ Print out brief summary of the raw data
         """
-        title = 'Paravision {}'.format(self.version)
+        title = '\nParavision {}'.format(self.version)
         print(title)
         print('-' * len(title))
+        print('\nYou are looking the summary of [{}]\n'.format(self.path))
         if len(self.scanned):
             date, start_time, end_time = self.scan_datetime()
-            print('Date:\t{}\tScan duration:\t{}-{}'.format(date, start_time, end_time))
-            print('Study ID:\t{}'.format(self.subject['SUBJECT_id']))
+            print('UserAccount:\t{}'.format(self.subject['OWNER']))
+            print('Researcher:\t{}'.format(self.user_name))
+            print('Date:\t\t{}'.format(date))
+            print('Scan duration:\t{} - {}'.format(start_time, end_time))
+            print('Subject ID:\t{}'.format(self.subject['SUBJECT_id']))
             print('Session ID:\t{}'.format(self.subject['SUBJECT_study_name']))
-            print('\nScanID\tSequence::Protocol')
+            print('Study ID:\t{}'.format(self.subject['SUBJECT_study_nr']))
+            sub_info, pos, weight = self.subject_info()
+            print('Subject Type:\t{}'.format(sub_info[0]))
+            print('Gender:\t\t{}'.format(sub_info[1]))
+            print('Date of Birth:\t{}'.format(sub_info[2]))
+            print('weight:\t\t{} kg'.format(weight))
+            print('Position:\t{}\t\tEntry:\t{}'.format(pos[0], pos[1]))
+            print('\nScanID\tSequence::Protocol::[Parameters]')
             for scan in self.scanned:
                 acqp = self.scans[str(scan)]['acqp']
-                method = acqp['ACQ_method']
-                if ':' in method or ' ' in method:
-                    method = acqp['ACQ_method'].split(':')[-1]
-                print('{}:\t{}::{}'.format(str(scan).zfill(3),
-                                           method,
-                                           acqp['ACQ_scan_name']))
+                # method = self.scans[str(scan)]['method']
+                scan_method = acqp['ACQ_method']
+                if ':' in scan_method or ' ' in scan_method:
+                    scan_method = acqp['ACQ_method'].split(':')[-1]
+                params = self.method_param(scan)
+                params = "[ TR: {0}ms, TE: {1:.2f}ms, BW: {2:.2f}kHz, FlipAngle: {3} ]".format(*params)
+                print('{}:\t{}::{}::{}'.format(str(scan).zfill(3),
+                                               scan_method,
+                                               acqp['ACQ_scan_name'],
+                                               params))
                 for reco in self.scans[str(scan)]['reco'].keys():
                     dim, size, slice_packs, idx = self.get_size(scan, reco)
+                    recoparam = self.scans[str(scan)]['recoparam'][str(reco)]
+                    mmode = recoparam['RECO_map_mode']
+                    range = "{} ~ {}".format(*recoparam['RECO_map_range'])
                     if dim > 1:
                         if idx:
                             del size[idx]
@@ -551,9 +684,14 @@ class BrukerRaw:
                             resol = ','.join(['{}'.format(round(i, 2)) for i in self.get_resol(scan, reco)])
                             size = 'x'.join(map(str, size))
                             size = '{}, resol(mm): {}'.format(size, resol)
-                        print('\t[{}] dim: {}D, size: {}'.format(str(reco).zfill(2),
-                                                                 dim, size))
+                        print('\t[{}] dim: {}D, size: {}, \n'
+                              '\t     mapmode: {}, range: {}'.format(str(reco).zfill(2),
+                                                                                         dim, size,
+                                                                                         mmode, range))
                     else:
-                        print('\t[{}] dim: {}D, size: {}'.format(str(reco).zfill(2), dim, size))
+                        print('\t[{}] dim: {}D, size: {}, \n'
+                              '\t     mapmode: {}, range: {}'.format(str(reco).zfill(2),
+                                                                                         dim, size,
+                                                                                         mmode, range))
         else:
             print('Empty study...')

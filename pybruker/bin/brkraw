@@ -8,7 +8,7 @@ import datetime
 
 def main():
     parser = argparse.ArgumentParser(prog='brkraw',
-                                     description="Bruker Raw data Handler")
+                                     description="Command line tool of Bruker Rawdata Handler")
     parser.add_argument("-v", "--version", action='version', version='%(prog)s v{}'.format(__version__))
 
     subparsers = parser.add_subparsers(title='Sub-commands',
@@ -33,7 +33,9 @@ def main():
     nii.add_argument("-r", "--recoid", help="RECO ID (if scan has multiple reconstruction data)", type=int, default=1)
     nii.add_argument("-s", "--scanid", help="Scan ID", type=str)
 
-    niiall = subparsers.add_parser("tonii_all", help='Convert All Datasets')
+    niiall = subparsers.add_parser("tonii_all", help="Convert All Datasets inside input path, "
+                                                     "Caution: Don't use this function on console computer!! "
+                                                     "It will take forever!!")
     niiall.add_argument("path", help="Path of dataset root folder", type=str)
 
     args = parser.parse_args()
@@ -83,20 +85,29 @@ def main():
                     stimes.append(str(start_time))
                     etimes.append(str(end_time))
                     scandurs.append(str(datetime.time(hours, minutes, seconds)))
+
         df = pd.DataFrame(dict(Username=users,
                                Date=dates,
                                StartTime=stimes,
                                EndTime=etimes,
                                ScanDuration=scandurs))
+
         df = df[['Username', 'Date', 'StartTime', 'EndTime', 'ScanDuration']]
         df.to_excel(output, index=False)
         print('Usage report is genetared... [{}]'.format(output))
 
     elif args.function == 'summary':
         path = args.path
-        study = BrukerRaw(path)
-        if study.scanned != None:
-            study.summary()
+        if os.path.isdir(path):
+            study = BrukerRaw(path)
+            if len(study.scanned):
+                study.summary()
+        else:
+            list_path = [d for d in os.listdir('.') if (os.path.isdir(d) and re.search(path, d, re.IGNORECASE))]
+            for p in list_path:
+                study = BrukerRaw(p)
+                if len(study.scanned):
+                    study.summary()
 
     elif args.function == 'tonii':
         path = args.path
@@ -109,8 +120,11 @@ def main():
             output = '{}_{}-{}-{}'.format(study.study_id,
                                           study.session_id,
                                           scan, reco)
-        study.save_as(scan, reco, output)
-        print('NifTi file is genetared... [{}]'.format(output))
+        saved = study.save_as(scan, reco, output)
+        if saved:
+            print('Data cannot be converted due to dimension... [{}]'.format(output))
+        else:
+            print('NifTi file is genetared... [{}]'.format(output))
 
     elif args.function == 'tonii_all':
         path = args.path
