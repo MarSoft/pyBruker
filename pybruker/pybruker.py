@@ -26,6 +26,9 @@ class BrukerRaw:
             if summary:
                 self.summary()
         except:
+            self.subject = None
+            self.scanned = None
+            self.scans = None
             print('Empty study...')
 
     def check_scans(self):

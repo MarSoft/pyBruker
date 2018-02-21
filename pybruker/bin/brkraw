@@ -50,11 +50,11 @@ def main():
         stimes = []
         etimes = []
         for raw in list_of_raw:
-            if args.keyword:
-                if re.search(args.keyword, raw, re.IGNORECASE):
-                    sub_path = os.path.join(path, raw)
-                    study = BrukerRaw(sub_path)
-                    if len(study.scanned):
+            try:
+                if args.keyword:
+                    if re.search(args.keyword, raw, re.IGNORECASE):
+                        sub_path = os.path.join(path, raw)
+                        study = BrukerRaw(sub_path)
                         users.append(study.user_name)
                         date, start_time, end_time = study.scan_datetime()
                         t1 = datetime.datetime.combine(date, start_time)
@@ -67,10 +67,9 @@ def main():
                         stimes.append(str(start_time))
                         etimes.append(str(end_time))
                         scandurs.append(str(datetime.time(hours, minutes, seconds)))
-            else:
-                sub_path = os.path.join(path, raw)
-                study = BrukerRaw(sub_path)
-                if len(study.scanned):
+                else:
+                    sub_path = os.path.join(path, raw)
+                    study = BrukerRaw(sub_path)
                     users.append(study.user_name)
                     date, start_time, end_time = study.scan_datetime()
                     t1 = datetime.datetime.combine(date, start_time)
@@ -83,6 +82,8 @@ def main():
                     stimes.append(str(start_time))
                     etimes.append(str(end_time))
                     scandurs.append(str(datetime.time(hours, minutes, seconds)))
+            except:
+                pass
         df = pd.DataFrame(dict(Username=users,
                                Date=dates,
                                StartTime=stimes,
@@ -121,37 +122,40 @@ def main():
         for raw in list_of_raw:
             sub_path = os.path.join(path, raw)
             study = BrukerRaw(sub_path)
-            subj_path = os.path.join(base_path, 'sub-{}'.format(study.study_id))
-            try:
-                os.mkdir(subj_path)
-            except:
-                pass
-            sess_path = os.path.join(subj_path, 'ses-{}'.format(study.session_id))
-            try:
-                os.mkdir(sess_path)
-            except:
-                pass
-            for scan in study.scanned:
-                method = study.check_method(scan)
-                if re.search('epi', method, re.IGNORECASE) and not re.search('dti', method, re.IGNORECASE):
-                    output_path = os.path.join(sess_path, 'func')
-                elif re.search('dti', method, re.IGNORECASE):
-                    output_path = os.path.join(sess_path, 'dwi')
-                elif re.search('flash', method, re.IGNORECASE) or re.search('rare', method, re.IGNORECASE):
-                    output_path = os.path.join(sess_path, 'anat')
-                else:
-                    output_path = os.path.join(sess_path, 'etc')
+            if study.scanned:
+                subj_path = os.path.join(base_path, 'sub-{}'.format(study.study_id))
                 try:
-                    os.mkdir(output_path)
+                    os.mkdir(subj_path)
                 except:
                     pass
-                filename = 'sub-{}_ses-{}_{}'.format(study.study_id, study.session_id, str(scan).zfill(2))
-                recos = study.scans[str(scan)]['reco'].keys()
-                for reco in recos:
-                    output_fname = os.path.join(output_path, '{}_reco-{}'.format(filename,
-                                                                                 str(reco).zfill(2)))
-                    study.save_as(scan, reco, output_fname)
-            print('{} is converted...'.format(raw))
+                sess_path = os.path.join(subj_path, 'ses-{}'.format(study.session_id))
+                try:
+                    os.mkdir(sess_path)
+                except:
+                    pass
+                for scan in study.scanned:
+                    method = study.check_method(scan)
+                    if re.search('epi', method, re.IGNORECASE) and not re.search('dti', method, re.IGNORECASE):
+                        output_path = os.path.join(sess_path, 'func')
+                    elif re.search('dti', method, re.IGNORECASE):
+                        output_path = os.path.join(sess_path, 'dwi')
+                    elif re.search('flash', method, re.IGNORECASE) or re.search('rare', method, re.IGNORECASE):
+                        output_path = os.path.join(sess_path, 'anat')
+                    else:
+                        output_path = os.path.join(sess_path, 'etc')
+                    try:
+                        os.mkdir(output_path)
+                    except:
+                        pass
+                    filename = 'sub-{}_ses-{}_{}'.format(study.study_id, study.session_id, str(scan).zfill(2))
+                    recos = study.scans[str(scan)]['reco'].keys()
+                    for reco in recos:
+                        output_fname = os.path.join(output_path, '{}_reco-{}'.format(filename,
+                                                                                     str(reco).zfill(2)))
+                        study.save_as(scan, reco, output_fname)
+                print('{} is converted...'.format(raw))
+            else:
+                print('{} is empty...'.format(raw))
     else:
         pass
 
