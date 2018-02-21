@@ -50,14 +50,30 @@ def main():
         stimes = []
         etimes = []
         for raw in list_of_raw:
-            if re.search(args.keyword, raw, re.IGNORECASE):
+            if args.keyword:
+                if re.search(args.keyword, raw, re.IGNORECASE):
+                    sub_path = os.path.join(path, raw)
+                    study = BrukerRaw(sub_path)
+                    users.append(study.user_name)
+                    date, start_time, end_time = study.scan_datetime()
+                    t1 = datetime.datetime.combine(date, start_time)
+                    t2 = datetime.datetime.combine(date, end_time)
+                    dt = (t2-t1).seconds
+                    hours = dt / 3600
+                    minutes = dt % 3600 / 60
+                    seconds = dt % 3600 % 60
+                    dates.append(str(date))
+                    stimes.append(str(start_time))
+                    etimes.append(str(end_time))
+                    scandurs.append(str(datetime.time(hours, minutes, seconds)))
+            else:
                 sub_path = os.path.join(path, raw)
                 study = BrukerRaw(sub_path)
                 users.append(study.user_name)
                 date, start_time, end_time = study.scan_datetime()
                 t1 = datetime.datetime.combine(date, start_time)
                 t2 = datetime.datetime.combine(date, end_time)
-                dt = (t2-t1).seconds
+                dt = (t2 - t1).seconds
                 hours = dt / 3600
                 minutes = dt % 3600 / 60
                 seconds = dt % 3600 % 60
@@ -120,7 +136,7 @@ def main():
                 elif re.search('dti', method, re.IGNORECASE):
                     output_path = os.path.join(sess_path, 'dwi')
                 elif re.search('flash', method, re.IGNORECASE) or re.search('rare', method, re.IGNORECASE):
-                    output_path = os.path.join(sess_path, 'flash')
+                    output_path = os.path.join(sess_path, 'anat')
                 else:
                     output_path = os.path.join(sess_path, 'etc')
                 try:
@@ -134,71 +150,8 @@ def main():
                                                                                  str(reco).zfill(2)))
                     study.save_as(scan, reco, output_fname)
             print('{} is converted...'.format(raw))
-
-
-
-
-
     else:
         pass
-
-    args = parser.parse_args()
-    path = args.path
-    study = BrukerRaw(path)
-
-    if not args.output:
-        output = "sub-{}".format(study.study_id)
-    else:
-        output = args.output
-    if args.scanid:
-        output = "{}-{}-{}".format(output, args.pid, str(args.scanid).zfill(2))
-        study.save_as(args.scanid, args.pid, output)
-    else:
-        os.mkdir(output)
-        scan_list = study.scanned
-        for num in sorted(scan_list):
-            try:
-                pid_list = sorted([int(n) for n in os.listdir(os.path.join(path, str(num), 'pdata')) if regex.match(n)])
-                _raw = BrukerRaw(path, num)
-                _method = _raw.method['Method']
-                if _method == 'EPI':
-                    if _raw.method['PVM_NRepetitions'] > 1:
-                        dtype = 'func'
-                    else:
-                        dtype = None
-                elif _method == 'DtiEpi':
-                    dtype = 'dwi'
-                elif _method == 'FieldMap':
-                    dtype = 'fmap'
-                elif _method == 'RARE' or _method == 'FLASH':
-                    if isinstance(_raw.method['PVM_SPackArrSliceOrient'], str):
-                        dtype = 'anat'
-                    else:
-                        dtype = None
-                else:
-                    dtype = None
-                if dtype:
-                    for pid in pid_list:
-                        ses = BrukerRaw(path).subject['SUBJECT_study_name']
-                        if ses:
-                            ses_path = os.path.join(output, 'ses-{}'.format(ses))
-                            dtype_path = os.path.join(output, 'ses-{}'.format(ses), dtype)
-                            os.mkdir(ses_path, dtype_path)
-                            surfix = 'ses-{}_{}'.format(ses, str(num).zfill(2))
-                        else:
-                            dtype_path = os.path.join(output, dtype)
-                            os.mkdir(dtype_path)
-                            surfix = '{}'.format(str(num).zfill(2))
-                        if len(pid_list) > 1:
-                            surfix = '{}_rec-{}'.format(surfix, str(pid).zfill(2))
-                        filepath = os.path.join(dtype_path, '{}_{}.nii.gz'.format(output, surfix))
-                        try:
-                            img = BrukerRaw(path, num, pid, ori=args.orient, convert=True)
-                            img.nii.to_filename(filepath)
-                        except:
-                            pass
-            except:
-                pass
 
 if __name__ == '__main__':
     main()

@@ -15,7 +15,7 @@ __author__ = 'SungHo Lee'
 __email__ = 'shlee@unc.edu'
 __url__ = 'https://dvm-shlee.github.io'
 
-setup(name='PyBruker',
+setup(name='pyBruker',
       version=__version__,
       description='Python Bruker Raw Data Handler',
       author=__author__,

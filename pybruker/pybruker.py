@@ -416,30 +416,37 @@ class BrukerRaw:
     def scan_datetime(self, item='all'):
         """ item = 'all', 'date', 'duration' or 'time'
         """
-        last_scan = str(self.scanned[-1])
-        if self.check_version(last_scan, 1) == 1:
-            pattern = r'(\d{2}:\d{2}:\d{2})\s(\d{2}\s\w+\s\d{4})'
-            start_time = self.subject['SUBJECT_date']
-            acq_time = self.scans[last_scan]['reco']['1']['VisuAcqScanTime'] / 1000
-            last_scan_time = self.scans[last_scan]['reco']['1']['VisuAcqDate']
-            date = dateutil.parser.parse(re.sub(pattern, r'\2', start_time)).date()
-            start_time = datetime.time(*map(int, re.sub(pattern, r'\1', start_time).split(':')))
-            last_scan_time = datetime.time(*map(int, re.sub(pattern, r'\1', last_scan_time).split(':')))
-            time_delta = datetime.timedelta(0, acq_time)
-            end_time = (datetime.datetime.combine(date, last_scan_time) + time_delta).time()
+        if len(self.scanned):
+            last_scan = str(self.scanned[-1])
+            if self.check_version(last_scan, 1) == 1:
+                pattern = r'(\d{2}:\d{2}:\d{2})\s(\d{2}\s\w+\s\d{4})'
+                start_time = self.subject['SUBJECT_date']
+                acq_time = self.scans[last_scan]['reco']['1']['VisuAcqScanTime'] / 1000
+                last_scan_time = self.scans[last_scan]['reco']['1']['VisuAcqDate']
+                date = dateutil.parser.parse(re.sub(pattern, r'\2', start_time)).date()
+                start_time = datetime.time(*map(int, re.sub(pattern, r'\1', start_time).split(':')))
+                last_scan_time = datetime.time(*map(int, re.sub(pattern, r'\1', last_scan_time).split(':')))
+                time_delta = datetime.timedelta(0, acq_time)
+                end_time = (datetime.datetime.combine(date, last_scan_time) + time_delta).time()
+            else:
+                pattern = r'(\d{4}-\d{2}-\d{2})[T](\d{2}:\d{2}:\d{2})'
+                start_time = self.subject['SUBJECT_date'].split(',')[0]
+                end_time = self.scans[last_scan]['reco']['1']['VisuCreationDate'].split(',')[0]
+                date = datetime.date(*map(int, re.sub(pattern, r'\1', start_time).split('-')))
+                start_time = datetime.time(*map(int, re.sub(pattern, r'\2', start_time).split(':')))
+                end_time = datetime.time(*map(int, re.sub(pattern, r'\2', end_time).split(':')))
         else:
-            pattern = r'(\d{4}-\d{2}-\d{2})[T](\d{2}:\d{2}:\d{2})'
-            start_time = self.subject['SUBJECT_date'].split(',')[0]
-            end_time = self.scans[last_scan]['reco']['1']['VisuCreationDate'].split(',')[0]
-            date = datetime.date(*map(int, re.sub(pattern, r'\1', start_time).split('-')))
-            start_time = datetime.time(*map(int, re.sub(pattern, r'\2', start_time).split(':')))
-            end_time = datetime.time(*map(int, re.sub(pattern, r'\2', end_time).split(':')))
+            date = None
+            start_time = None
+            end_time = None
+
         if item == 'all':
             return date, start_time, end_time
         elif item == 'date':
             return date
         elif item == 'time' or item == 'duration':
             return start_time, end_time
+
 
     @property
     def study_id(self):
@@ -489,7 +496,6 @@ class BrukerRaw:
         acqp = self.scans[str(scan)]['acqp']
         tr = self.calc_tempresol(scan)
         if re.search('EPI', method['Method'], re.IGNORECASE) and not re.search('DTI', method['Method'], re.IGNORECASE):
-            print(method['Method'])
             nii.header.set_xyzt_units('mm', 'sec')
             nii.header['pixdim'][4] = float(tr) / 1000
             nii.header.set_dim_info(slice=2)
