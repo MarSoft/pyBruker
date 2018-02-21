@@ -15,15 +15,18 @@ class BrukerRaw:
         """ Initiate the object
         """
         self.path = path
-        with open(os.path.join(path, 'subject')) as f:
-            subject = f.readlines()[:]
-            self.subject = self.parsing(subject)
-        pattern = r'Parameter List, ParaVision (.*)'
-        self.version = re.sub(pattern, r'\1', self.subject['TITLE'])
-        # Check all scan information
-        self.check_scans()
-        if summary:
-            self.summary()
+        try:
+            with open(os.path.join(path, 'subject')) as f:
+                subject = f.readlines()[:]
+                self.subject = self.parsing(subject)
+            pattern = r'Parameter List, ParaVision (.*)'
+            self.version = re.sub(pattern, r'\1', self.subject['TITLE'])
+            # Check all scan information
+            self.check_scans()
+            if summary:
+                self.summary()
+        except:
+            print('Empty study...')
 
     def check_scans(self):
         """ Check all scans and save the parameter into self.scans object as dictionary
