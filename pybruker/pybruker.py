@@ -526,32 +526,35 @@ class BrukerRaw:
         title = 'Paravision {}'.format(self.version)
         print(title)
         print('-' * len(title))
-        date, start_time, end_time = self.scan_datetime()
-        print('Date:\t{}\tScan duration:\t{}-{}'.format(date, start_time, end_time))
-        print('Study ID:\t{}'.format(self.subject['SUBJECT_id']))
-        print('Session ID:\t{}'.format(self.subject['SUBJECT_study_name']))
-        print('\nScanID\tSequence::Protocol')
-        for scan in self.scanned:
-            acqp = self.scans[str(scan)]['acqp']
-            method = acqp['ACQ_method']
-            if ':' in method or ' ' in method:
-                method = acqp['ACQ_method'].split(':')[-1]
-            print('{}:\t{}::{}'.format(str(scan).zfill(3),
-                                       method,
-                                       acqp['ACQ_scan_name']))
-            for reco in self.scans[str(scan)]['reco'].keys():
-                dim, size, slice_packs, idx = self.get_size(scan, reco)
-                if dim > 1:
-                    if idx:
-                        del size[idx]
-                        resol = ','.join(['{}'.format(round(i, 2)) for i in self.get_resol(scan, reco)[0]])
-                        size = 'x'.join(map(str, size))
-                        size = '{}, resol(mm): {}, slice_packs: {}'.format(size, resol, slice_packs)
+        if len(self.scanned):
+            date, start_time, end_time = self.scan_datetime()
+            print('Date:\t{}\tScan duration:\t{}-{}'.format(date, start_time, end_time))
+            print('Study ID:\t{}'.format(self.subject['SUBJECT_id']))
+            print('Session ID:\t{}'.format(self.subject['SUBJECT_study_name']))
+            print('\nScanID\tSequence::Protocol')
+            for scan in self.scanned:
+                acqp = self.scans[str(scan)]['acqp']
+                method = acqp['ACQ_method']
+                if ':' in method or ' ' in method:
+                    method = acqp['ACQ_method'].split(':')[-1]
+                print('{}:\t{}::{}'.format(str(scan).zfill(3),
+                                           method,
+                                           acqp['ACQ_scan_name']))
+                for reco in self.scans[str(scan)]['reco'].keys():
+                    dim, size, slice_packs, idx = self.get_size(scan, reco)
+                    if dim > 1:
+                        if idx:
+                            del size[idx]
+                            resol = ','.join(['{}'.format(round(i, 2)) for i in self.get_resol(scan, reco)[0]])
+                            size = 'x'.join(map(str, size))
+                            size = '{}, resol(mm): {}, slice_packs: {}'.format(size, resol, slice_packs)
+                        else:
+                            resol = ','.join(['{}'.format(round(i, 2)) for i in self.get_resol(scan, reco)])
+                            size = 'x'.join(map(str, size))
+                            size = '{}, resol(mm): {}'.format(size, resol)
+                        print('\t[{}] dim: {}D, size: {}'.format(str(reco).zfill(2),
+                                                                 dim, size))
                     else:
-                        resol = ','.join(['{}'.format(round(i, 2)) for i in self.get_resol(scan, reco)])
-                        size = 'x'.join(map(str, size))
-                        size = '{}, resol(mm): {}'.format(size, resol)
-                    print('\t[{}] dim: {}D, size: {}'.format(str(reco).zfill(2),
-                                                             dim, size))
-                else:
-                    print('\t[{}] dim: {}D, size: {}'.format(str(reco).zfill(2), dim, size))
+                        print('\t[{}] dim: {}D, size: {}'.format(str(reco).zfill(2), dim, size))
+        else:
+            print('Empty study...')

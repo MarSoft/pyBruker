@@ -54,11 +54,28 @@ def main():
                 if re.search(args.keyword, raw, re.IGNORECASE):
                     sub_path = os.path.join(path, raw)
                     study = BrukerRaw(sub_path)
+                    if len(study.scanned):
+                        users.append(study.user_name)
+                        date, start_time, end_time = study.scan_datetime()
+                        t1 = datetime.datetime.combine(date, start_time)
+                        t2 = datetime.datetime.combine(date, end_time)
+                        dt = (t2-t1).seconds
+                        hours = dt / 3600
+                        minutes = dt % 3600 / 60
+                        seconds = dt % 3600 % 60
+                        dates.append(str(date))
+                        stimes.append(str(start_time))
+                        etimes.append(str(end_time))
+                        scandurs.append(str(datetime.time(hours, minutes, seconds)))
+            else:
+                sub_path = os.path.join(path, raw)
+                study = BrukerRaw(sub_path)
+                if len(study.scanned):
                     users.append(study.user_name)
                     date, start_time, end_time = study.scan_datetime()
                     t1 = datetime.datetime.combine(date, start_time)
                     t2 = datetime.datetime.combine(date, end_time)
-                    dt = (t2-t1).seconds
+                    dt = (t2 - t1).seconds
                     hours = dt / 3600
                     minutes = dt % 3600 / 60
                     seconds = dt % 3600 % 60
@@ -66,21 +83,6 @@ def main():
                     stimes.append(str(start_time))
                     etimes.append(str(end_time))
                     scandurs.append(str(datetime.time(hours, minutes, seconds)))
-            else:
-                sub_path = os.path.join(path, raw)
-                study = BrukerRaw(sub_path)
-                users.append(study.user_name)
-                date, start_time, end_time = study.scan_datetime()
-                t1 = datetime.datetime.combine(date, start_time)
-                t2 = datetime.datetime.combine(date, end_time)
-                dt = (t2 - t1).seconds
-                hours = dt / 3600
-                minutes = dt % 3600 / 60
-                seconds = dt % 3600 % 60
-                dates.append(str(date))
-                stimes.append(str(start_time))
-                etimes.append(str(end_time))
-                scandurs.append(str(datetime.time(hours, minutes, seconds)))
         df = pd.DataFrame(dict(Username=users,
                                Date=dates,
                                StartTime=stimes,
