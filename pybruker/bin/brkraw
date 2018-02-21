@@ -50,11 +50,11 @@ def main():
         stimes = []
         etimes = []
         for raw in list_of_raw:
-            try:
-                if args.keyword:
-                    if re.search(args.keyword, raw, re.IGNORECASE):
-                        sub_path = os.path.join(path, raw)
-                        study = BrukerRaw(sub_path)
+            if args.keyword:
+                if re.search(args.keyword, raw, re.IGNORECASE):
+                    sub_path = os.path.join(path, raw)
+                    study = BrukerRaw(sub_path)
+                    if study.scanned != None:
                         users.append(study.user_name)
                         date, start_time, end_time = study.scan_datetime()
                         t1 = datetime.datetime.combine(date, start_time)
@@ -67,9 +67,10 @@ def main():
                         stimes.append(str(start_time))
                         etimes.append(str(end_time))
                         scandurs.append(str(datetime.time(hours, minutes, seconds)))
-                else:
-                    sub_path = os.path.join(path, raw)
-                    study = BrukerRaw(sub_path)
+            else:
+                sub_path = os.path.join(path, raw)
+                study = BrukerRaw(sub_path)
+                if study.scanned != None:
                     users.append(study.user_name)
                     date, start_time, end_time = study.scan_datetime()
                     t1 = datetime.datetime.combine(date, start_time)
@@ -82,8 +83,6 @@ def main():
                     stimes.append(str(start_time))
                     etimes.append(str(end_time))
                     scandurs.append(str(datetime.time(hours, minutes, seconds)))
-            except:
-                pass
         df = pd.DataFrame(dict(Username=users,
                                Date=dates,
                                StartTime=stimes,
@@ -95,7 +94,9 @@ def main():
 
     elif args.function == 'summary':
         path = args.path
-        BrukerRaw(path, summary=True)
+        study = BrukerRaw(path)
+        if study.scanned != None:
+            study.summary()
 
     elif args.function == 'tonii':
         path = args.path
@@ -122,7 +123,7 @@ def main():
         for raw in list_of_raw:
             sub_path = os.path.join(path, raw)
             study = BrukerRaw(sub_path)
-            if study.scanned:
+            if study.scanned != None:
                 subj_path = os.path.join(base_path, 'sub-{}'.format(study.study_id))
                 try:
                     os.mkdir(subj_path)
