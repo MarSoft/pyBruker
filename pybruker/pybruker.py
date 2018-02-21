@@ -27,7 +27,7 @@ class BrukerRaw:
                 self.summary()
         except:
             self.subject = None
-            self.scanned = None
+            self.scanned = []
             self.scans = None
 
     def check_scans(self):

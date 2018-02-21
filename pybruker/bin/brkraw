@@ -54,7 +54,7 @@ def main():
                 if re.search(args.keyword, raw, re.IGNORECASE):
                     sub_path = os.path.join(path, raw)
                     study = BrukerRaw(sub_path)
-                    if study.scanned != None:
+                    if len(study.scanned):
                         users.append(study.user_name)
                         date, start_time, end_time = study.scan_datetime()
                         t1 = datetime.datetime.combine(date, start_time)
@@ -70,7 +70,7 @@ def main():
             else:
                 sub_path = os.path.join(path, raw)
                 study = BrukerRaw(sub_path)
-                if study.scanned != None:
+                if len(study.scanned):
                     users.append(study.user_name)
                     date, start_time, end_time = study.scan_datetime()
                     t1 = datetime.datetime.combine(date, start_time)
@@ -123,7 +123,7 @@ def main():
         for raw in list_of_raw:
             sub_path = os.path.join(path, raw)
             study = BrukerRaw(sub_path)
-            if study.scanned != None:
+            if len(study.scanned):
                 subj_path = os.path.join(base_path, 'sub-{}'.format(study.study_id))
                 try:
                     os.mkdir(subj_path)
