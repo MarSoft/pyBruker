@@ -1,0 +1,204 @@
+#!/usr/bin/env python
+
+from pybruker import BrukerRaw, __version__
+import argparse
+import os, re
+import pandas as pd
+import datetime
+
+def main():
+    parser = argparse.ArgumentParser(prog='brkraw',
+                                     description="Bruker Raw data Handler")
+    parser.add_argument("-v", "--version", action='version', version='%(prog)s v{}'.format(__version__))
+
+    subparsers = parser.add_subparsers(title='Sub-commands',
+                                       description='brkraw provides two major function reporting '
+                                                   'contents on bruker raw data '
+                                                   'and converting image data into NifTi format.',
+                                       help='description',
+                                       dest='function',
+                                       metavar='command')
+
+    time = subparsers.add_parser("time", help='Report user scanning times')
+    time.add_argument("path", help="Path of data root folder", type=str)
+    time.add_argument("-k", "--keyword", help="Keyword for filtering", type=str, default=False)
+    time.add_argument("-o", "--output", help="Filename w/o extension to export Excel", type=str, default=False)
+
+    summary = subparsers.add_parser("summary", help='Print out data summary')
+    summary.add_argument("path", help="Folder location for the Bruker raw data", type=str)
+
+    nii = subparsers.add_parser("tonii", help='Convert to NifTi format')
+    nii.add_argument("path", help="Folder location for the Bruker raw data", type=str)
+    nii.add_argument("-o", "--output", help="Filename w/o extension to export NifTi image", type=str, default=False)
+    nii.add_argument("-r", "--recoid", help="RECO ID (if scan has multiple reconstruction data)", type=int, default=1)
+    nii.add_argument("-s", "--scanid", help="Scan ID", type=str)
+
+    niiall = subparsers.add_parser("tonii_all", help='Convert All Datasets')
+    niiall.add_argument("path", help="Path of dataset root folder", type=str)
+
+    args = parser.parse_args()
+    if args.function == 'time':
+        if args.output:
+            output = "{}.xlsx".format(args.output)
+        else:
+            output = "UsageReport_{}.xlsx".format(datetime.datetime.now().date())
+        path = args.path
+        list_of_raw = sorted([d for d in os.linesep(path) if os.path.isdir(os.path.join(path, d))])
+        users = []
+        dates = []
+        scandurs = []
+        stimes = []
+        etimes = []
+        for raw in list_of_raw:
+            if re.search(args.keyword, raw, re.IGNORECASE):
+                sub_path = os.path.join(path, raw)
+                study = BrukerRaw(sub_path)
+                users.append(study.user_name)
+                date, start_time, end_time = study.scan_datetime()
+                t1 = datetime.datetime.combine(date, start_time)
+                t2 = datetime.datetime.combine(date, end_time)
+                dt = (t2-t1).seconds
+                hours = dt / 3600
+                minutes = dt % 3600 / 60
+                seconds = dt % 3600 % 60
+                dates.append(str(date))
+                stimes.append(str(start_time))
+                etimes.append(str(end_time))
+                scandurs.append(str(datetime.time(hours, minutes, seconds)))
+        df = pd.DataFrame(dict(Username=users,
+                               Date=dates,
+                               StartTime=stimes,
+                               EndTime=etimes,
+                               ScanDuration=scandurs))
+        df = df[['Username', 'Date', 'StartTime', 'EndTime', 'ScanDuration']]
+        df.to_excel(output, index=False)
+        print('Usage report is genetared... [{}]'.format(output))
+
+    elif args.function == 'summary':
+        path = args.path
+        BrukerRaw(path, summary=True)
+
+    elif args.function == 'tonii':
+        path = args.path
+        scan = args.scanid
+        reco = args.recoid
+        study = BrukerRaw(path)
+        if args.output:
+            output = args.output
+        else:
+            output = '{}_{}-{}-{}'.format(study.study_id,
+                                          study.session_id,
+                                          scan, reco)
+        study.save_as(scan, reco, output)
+        print('NifTi file is genetared... [{}]'.format(output))
+
+    elif args.function == 'tonii_all':
+        path = args.path
+        list_of_raw = sorted([d for d in os.linesep(path) if os.path.isdir(os.path.join(path, d))])
+        base_path = 'Data'
+        try:
+            os.mkdir(base_path)
+        except:
+            pass
+        for raw in list_of_raw:
+            sub_path = os.path.join(path, raw)
+            study = BrukerRaw(sub_path)
+            subj_path = os.path.join(base_path, 'sub-{}'.format(study.study_id))
+            try:
+                os.mkdir(subj_path)
+            except:
+                pass
+            sess_path = os.path.join(subj_path, 'ses-{}'.format(study.session_id))
+            try:
+                os.mkdir(sess_path)
+            except:
+                pass
+            for scan in study.scanned:
+                method = study.check_method(scan)
+                if re.search('epi', method, re.IGNORECASE) and not re.search('dti', method, re.IGNORECASE):
+                    output_path = os.path.join(sess_path, 'func')
+                elif re.search('dti', method, re.IGNORECASE):
+                    output_path = os.path.join(sess_path, 'dwi')
+                elif re.search('flash', method, re.IGNORECASE) or re.search('rare', method, re.IGNORECASE):
+                    output_path = os.path.join(sess_path, 'flash')
+                else:
+                    output_path = os.path.join(sess_path, 'etc')
+                try:
+                    os.mkdir(output_path)
+                except:
+                    pass
+                filename = 'sub-{}_ses-{}_{}'.format(study.study_id, study.session_id, str(scan).zfill(2))
+                recos = study.scans[str(scan)]['reco'].keys()
+                for reco in recos:
+                    output_fname = os.path.join(output_path, '{}_reco-{}'.format(filename,
+                                                                                 str(reco).zfill(2)))
+                    study.save_as(scan, reco, output_fname)
+            print('{} is converted...'.format(raw))
+
+
+
+
+
+    else:
+        pass
+
+    args = parser.parse_args()
+    path = args.path
+    study = BrukerRaw(path)
+
+    if not args.output:
+        output = "sub-{}".format(study.study_id)
+    else:
+        output = args.output
+    if args.scanid:
+        output = "{}-{}-{}".format(output, args.pid, str(args.scanid).zfill(2))
+        study.save_as(args.scanid, args.pid, output)
+    else:
+        os.mkdir(output)
+        scan_list = study.scanned
+        for num in sorted(scan_list):
+            try:
+                pid_list = sorted([int(n) for n in os.listdir(os.path.join(path, str(num), 'pdata')) if regex.match(n)])
+                _raw = BrukerRaw(path, num)
+                _method = _raw.method['Method']
+                if _method == 'EPI':
+                    if _raw.method['PVM_NRepetitions'] > 1:
+                        dtype = 'func'
+                    else:
+                        dtype = None
+                elif _method == 'DtiEpi':
+                    dtype = 'dwi'
+                elif _method == 'FieldMap':
+                    dtype = 'fmap'
+                elif _method == 'RARE' or _method == 'FLASH':
+                    if isinstance(_raw.method['PVM_SPackArrSliceOrient'], str):
+                        dtype = 'anat'
+                    else:
+                        dtype = None
+                else:
+                    dtype = None
+                if dtype:
+                    for pid in pid_list:
+                        ses = BrukerRaw(path).subject['SUBJECT_study_name']
+                        if ses:
+                            ses_path = os.path.join(output, 'ses-{}'.format(ses))
+                            dtype_path = os.path.join(output, 'ses-{}'.format(ses), dtype)
+                            os.mkdir(ses_path, dtype_path)
+                            surfix = 'ses-{}_{}'.format(ses, str(num).zfill(2))
+                        else:
+                            dtype_path = os.path.join(output, dtype)
+                            os.mkdir(dtype_path)
+                            surfix = '{}'.format(str(num).zfill(2))
+                        if len(pid_list) > 1:
+                            surfix = '{}_rec-{}'.format(surfix, str(pid).zfill(2))
+                        filepath = os.path.join(dtype_path, '{}_{}.nii.gz'.format(output, surfix))
+                        try:
+                            img = BrukerRaw(path, num, pid, ori=args.orient, convert=True)
+                            img.nii.to_filename(filepath)
+                        except:
+                            pass
+            except:
+                pass
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,10 @@
+*.pyc
+*.whl
+.idea/
+.idea/*
+dist/
+dist/*
+build/
+build/*
+pyBryjer.egg-info/
+pyBruker.egg-info/*
