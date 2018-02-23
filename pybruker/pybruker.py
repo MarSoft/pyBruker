@@ -614,6 +614,9 @@ class BrukerRaw:
             nii.header['pixdim'][4] = float(tr) / 1000
             nii.header.set_dim_info(slice=2)
             nii.header['slice_duration'] = float(tr) / (1000 * acqp['NSLICES'])
+            list_slices = acqp['ACQ_obj_order']
+            if isinstance(list_slices, int):
+                list_slices = [list_slices]
             if method['PVM_ObjOrderScheme'] == 'User_defined_slice_scheme':
                 nii.header['slice_code'] = 0
             elif method['PVM_ObjOrderScheme'] == 'Sequential':
@@ -626,8 +629,12 @@ class BrukerRaw:
                 nii.header['slice_code'] = 4
             elif method['PVM_ObjOrderScheme'] == 'Angiopraphy':
                 nii.header['slice_code'] = 0
-            nii.header['slice_start'] = min(acqp['ACQ_obj_order'])
-            nii.header['slice_end'] = max(acqp['ACQ_obj_order'])
+            if nii.header['slice_code'] == 1 or nii.header['slice_code'] == 3:
+                nii.header['slice_start'] = max(list_slices)
+                nii.header['slice_end'] = min(list_slices)
+            else:
+                nii.header['slice_start'] = min(list_slices)
+                nii.header['slice_end'] = max(list_slices)
         else:
             nii.header.set_xyzt_units('mm', 'unknown')
             nii.header['qform_code'] = 1
