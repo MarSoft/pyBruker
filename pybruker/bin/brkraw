@@ -117,14 +117,22 @@ def main():
         if args.output:
             output = args.output
         else:
-            output = '{}_{}-{}-{}'.format(study.study_id,
+            output = '{}_{}-{}'.format(study.study_id,
                                           study.session_id,
-                                          scan, reco)
-        saved = study.save_as(scan, reco, output)
-        if saved:
-            print('Data cannot be converted due to dimension... [{}]'.format(output))
+                                          scan)
+        if reco:
+            saved = study.save_as(scan, reco, "{}-{}".format(output, reco))
+            if saved:
+                print('Data cannot be converted due to dimension... [{}]'.format(output))
+            else:
+                print('NifTi file is genetared... [{}]'.format(output))
         else:
-            print('NifTi file is genetared... [{}]'.format(output))
+            for reco in study.scanned:
+                saved = study.save_as(scan, reco, "{}-{}".format(output, reco))
+                if saved:
+                    print('Data cannot be converted due to dimension... [{}]'.format(output))
+                else:
+                    print('NifTi file is genetared... [{}]'.format(output))
 
     elif args.function == 'tonii_all':
         path = args.path
