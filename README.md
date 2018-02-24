@@ -1,5 +1,5 @@
 # PyBruker
-## Version: 1.0.8
+## Version: 1.0.9
 
 ### Requirements
 - Linux or Mac OSX
