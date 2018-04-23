@@ -29,6 +29,7 @@ def main():
 
     nii = subparsers.add_parser("tonii", help='Convert to NifTi format')
     nii.add_argument("path", help="Folder location for the Bruker raw data", type=str)
+    nii.add_argument("-a", "--abs", help='Keep absoluate range', action='store_true', default=False)
     nii.add_argument("-o", "--output", help="Filename w/o extension to export NifTi image", type=str, default=False)
     nii.add_argument("-r", "--recoid", help="RECO ID (if scan has multiple reconstruction data)", type=int, default=1)
     nii.add_argument("-s", "--scanid", help="Scan ID", type=str)
@@ -36,6 +37,7 @@ def main():
     niiall = subparsers.add_parser("tonii_all", help="Convert All Datasets inside input path, "
                                                      "Caution: Don't use this function on console computer!! "
                                                      "It will take forever!!")
+    niiall.add_argument("-a", "--abs", help='Keep absoluate range', action='store_true', default=False)
     niiall.add_argument("path", help="Path of dataset root folder", type=str)
 
     args = parser.parse_args()
@@ -120,7 +122,7 @@ def main():
             output = '{}_{}'.format(study.study_id,study.session_id)
         if scan:
             output_fname = '{}-{}-{}'.format(output, scan, reco)
-            saved = study.save_as(scan, reco, output_fname)
+            saved = study.save_as(scan, reco, output_fname, absrange=args.abs)
             if saved:
                 print('Data cannot be converted due to dimension... [{}]'.format(output_fname))
             else:
@@ -128,7 +130,7 @@ def main():
         else:
             for scan in study.scanned:
                 output_fname = '{}-{}-{}'.format(output, str(scan).zfill(2), reco)
-                saved = study.save_as(scan, reco, output_fname)
+                saved = study.save_as(scan, reco, output_fname, absrange=args.abs)
                 if saved:
                     print('Data cannot be converted due to dimension... [{}]'.format(output_fname))
                 else:
@@ -175,7 +177,7 @@ def main():
                     for reco in recos:
                         output_fname = os.path.join(output_path, '{}_reco-{}'.format(filename,
                                                                                      str(reco).zfill(2)))
-                        study.save_as(scan, reco, output_fname)
+                        study.save_as(scan, reco, output_fname, absrange=args.abs)
                 print('{} is converted...'.format(raw))
             else:
                 print('{} is empty...'.format(raw))
