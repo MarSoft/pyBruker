@@ -31,17 +31,23 @@ class BrukerRaw:
             self.subject = None
             self.scans = None
 
-    def method_param(self, scan):
+    def method_param(self, scan, reco=1):
         """ Check scan method parameter
 
         :param scan: Scan ID
         :return: TR, TE, FlipAngle, BandWidth
         """
         method = self.scans[str(scan)]['method']
-        acqp = self.scans[str(scan)]['acqp']
-        tr = method['PVM_RepetitionTime']
-        te = method['PVM_EchoTime']
-        fa = acqp['ACQ_flip_angle']
+#         acqp = self.scans[str(scan)]['acqp']
+        pars = self.scans[str(scan)]['reco'][str(reco)]
+#         try:
+#             tr = method['PVM_RepetitionTime']
+#             te = method['PVM_EchoTime']
+#             fa = acqp['ACQ_flip_angle']
+#         except:
+        tr = pars['VisuAcqRepetitionTime']
+        te = pars['VisuAcqEchoTime']
+        fa = pars['VisuAcqFlipAngle']
         try:
             bw = method['PVM_EffSWh']/1000.0
         except:
@@ -186,7 +192,7 @@ class BrukerRaw:
             img = img[:, :, ::-1, ...]
         return img
 
-    def save_as(self, scan, reco, filename, ext='.nii.gz'):
+    def save_as(self, scan, reco, filename, absrange=False, ext='.nii.gz'):
         """ Save image data into NifTi format
 
         :param scan: Scan ID
@@ -200,6 +206,10 @@ class BrukerRaw:
             pass
         else:
             img = self.get_img(scan, reco)
+            if absrange == True:
+                slope = self.get_slope(scan, reco)
+                slope = list(set(slope))[0]
+                img = img / float(slope)
             affine = self.calc_affine(scan, reco)
             if slice_packs == 1:
                 nii = nib.Nifti1Image(img, affine)
@@ -573,14 +583,16 @@ class BrukerRaw:
             output *= i
         return output
 
-    def calc_tempresol(self, scan):
+    def calc_tempresol(self, scan, reco=1):
         """ Calculate temporal resolution
 
         :param scan: Scan ID
         :return: Temporal resolution
         """
         method = self.scans[str(scan)]['method']
-        tr = method['PVM_RepetitionTime']
+        pars = self.scans[str(scan)]['reco'][str(reco)]
+        tr = pars['VisuAcqRepetitionTime']
+#         tr = method['PVM_RepetitionTime']
         num_avr = method['PVM_NAverages']
         try:
             num_seg = method['NSegments']
@@ -641,6 +653,10 @@ class BrukerRaw:
             nii.header['sform_code'] = 0
         return nii
 
+    def get_slope(self, scan, reco=1):
+        pars = self.scans[str(scan)]['reco'][str(reco)]
+        return pars['VisuCoreDataSlope']
+
     def summary(self):
         """ Print out brief summary of the raw data
         """
@@ -671,7 +687,10 @@ class BrukerRaw:
                 if ':' in scan_method or ' ' in scan_method:
                     scan_method = acqp['ACQ_method'].split(':')[-1]
                 params = self.method_param(scan)
-                params = "[ TR: {0}ms, TE: {1:.2f}ms, BW: {2:.2f}kHz, FlipAngle: {3} ]".format(*params)
+                try:
+                    params = "[ TR: {0}ms, TE: {1:.2f}ms, BW: {2:.2f}kHz, FlipAngle: {3} ]".format(*params)
+                except:
+                    params = "[ TR: {0}ms, TE: {1}ms, BW: {2:.2f}kHz, FlipAngle: {3} ]".format(*params)
                 print('{}:\t{}::{}::{}'.format(str(scan).zfill(3),
                                                scan_method,
                                                acqp['ACQ_scan_name'],
