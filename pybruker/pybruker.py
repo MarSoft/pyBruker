@@ -208,7 +208,8 @@ class BrukerRaw:
             img = self.get_img(scan, reco)
             if absrange == True:
                 slope = self.get_slope(scan, reco)
-                slope = list(set(slope))[0]
+                if isinstance(slope, list):
+                    slope = list(set(slope))[0]
                 img = img / float(slope)
             affine = self.calc_affine(scan, reco)
             if slice_packs == 1:
