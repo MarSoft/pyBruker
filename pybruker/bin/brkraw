@@ -103,13 +103,13 @@ def main():
         if os.path.isdir(path):
             study = BrukerRaw(path)
             if len(study.scanned):
-                study.summary()
+                study.print_summary(stdout=True)
         else:
             list_path = [d for d in os.listdir('.') if (os.path.isdir(d) and re.search(path, d, re.IGNORECASE))]
             for p in list_path:
                 study = BrukerRaw(p)
                 if len(study.scanned):
-                    study.summary()
+                    study.print_summary(stdout=True)
 
     elif args.function == 'tonii':
         path = args.path
@@ -159,7 +159,7 @@ def main():
                 except:
                     pass
                 for scan in study.scanned:
-                    method = study.check_method(scan)
+                    method = study.get_method(scan)
                     if re.search('epi', method, re.IGNORECASE) and not re.search('dti', method, re.IGNORECASE):
                         output_path = os.path.join(sess_path, 'func')
                     elif re.search('dti', method, re.IGNORECASE):

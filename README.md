@@ -1,5 +1,11 @@
 # PyBruker
-## Version: 1.0.9 
+## Version: 1.1.2
+
+The tools to convert Bruker raw to Nifti format.
+
+List of known issues,
+1. Incorrect orientation. (espetially for obliqued image.): currently, all oblique images are unwarped
+2. DTI header information is not compatible at this point. (working on to integrate it to extension header)
 
 ### Requirements
 - Linux or Mac OSX
